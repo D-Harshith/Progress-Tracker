@@ -1,0 +1,21 @@
+{
+  "name": "progress-tracker",
+  "version": "1.0.0",
+  "description": "Progress Tracker - Track your wake times and study sessions",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "dev": "cd server && npm run dev",
+    "render-build": "npm run install:all && npm run build"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/D-Harshith/Progress-Tracker.git"
+  },
+  "author": "D-Harshith",
+  "license": "MIT"
+}

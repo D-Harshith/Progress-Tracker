@@ -184,12 +184,22 @@ router.get('/heatmap', async (req, res) => {
             date: { $gte: startDate, $lte: endDate }
         }).select('date wakeTime totalStudyMinutes');
 
-        // Create a map for easy lookup
+        // Helper to calculate study category based on hours
+        const getStudyCategory = (minutes) => {
+            const hours = minutes / 60;
+            if (minutes === 0) return 'none';      // Red - no study
+            if (hours < 1) return 'low';           // Pale green
+            if (hours < 2) return 'medium';        // Light green
+            if (hours < 4) return 'good';          // Green
+            return 'high';                          // Bright green
+        };
+
+        // Create heatmap data with study-based categories
         const heatmapData = activities.map(act => ({
             date: act.date.toISOString().split('T')[0],
             wakeTime: act.wakeTime,
-            wakeCategory: act.wakeCategory,
-            studyMinutes: act.totalStudyMinutes
+            studyMinutes: act.totalStudyMinutes,
+            studyCategory: getStudyCategory(act.totalStudyMinutes)
         }));
 
         res.json(heatmapData);

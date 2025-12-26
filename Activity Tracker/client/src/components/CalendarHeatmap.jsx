@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
-import { analyticsApi, activitiesApi } from '../services/api';
+import { analyticsApi } from '../services/api';
 
 function CalendarHeatmap({ onDayClick, refreshTrigger }) {
     const [heatmapData, setHeatmapData] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [hoveredDate, setHoveredDate] = useState(null); // Store date string instead of object
-    const [hoveredDetails, setHoveredDetails] = useState(null);
-    const [detailsLoading, setDetailsLoading] = useState(false);
 
     useEffect(() => {
         fetchHeatmapData();
@@ -22,35 +19,6 @@ function CalendarHeatmap({ onDayClick, refreshTrigger }) {
         } finally {
             setLoading(false);
         }
-    };
-
-    // Fetch full activity details on hover
-    const fetchDayDetails = async (dateStr) => {
-        try {
-            setDetailsLoading(true);
-            const details = await activitiesApi.getByDate(dateStr);
-            setHoveredDetails(details);
-        } catch (err) {
-            setHoveredDetails(null);
-        } finally {
-            setDetailsLoading(false);
-        }
-    };
-
-    const handleMouseEnter = (day) => {
-        if (day) {
-            setHoveredDate(day.date); // Store date string
-            if (day.activity) {
-                fetchDayDetails(day.date);
-            } else {
-                setHoveredDetails(null);
-            }
-        }
-    };
-
-    const handleMouseLeave = () => {
-        setHoveredDate(null);
-        setHoveredDetails(null);
     };
 
     // Generate last 365 days grouped by month
@@ -128,34 +96,29 @@ function CalendarHeatmap({ onDayClick, refreshTrigger }) {
         return months;
     };
 
+    // Get color class based on study category (GitHub-style)
     const getColorClass = (activity) => {
-        if (!activity) return 'empty';
+        if (!activity) return 'empty';  // Gray - no data
 
-        const { wakeCategory } = activity;
-        switch (wakeCategory) {
-            case 'early': return 'early';
-            case 'good': return 'good';
-            case 'late': return 'late';
+        const { studyCategory } = activity;
+        switch (studyCategory) {
+            case 'none': return 'study-none';      // Red - no study
+            case 'low': return 'study-low';        // Pale green
+            case 'medium': return 'study-medium';  // Light green
+            case 'good': return 'study-good';      // Green
+            case 'high': return 'study-high';      // Bright green
             default: return 'empty';
         }
     };
 
-    const formatDuration = (minutes) => {
-        if (!minutes) return '0m';
+    // Format study hours for display
+    const formatStudyHours = (minutes) => {
+        if (!minutes) return '0h';
         const hours = Math.floor(minutes / 60);
         const mins = minutes % 60;
-        if (hours > 0) {
-            return `${hours}h ${mins}m`;
-        }
+        if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+        if (hours > 0) return `${hours}h`;
         return `${mins}m`;
-    };
-
-    const formatDate = (dateStr) => {
-        return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric'
-        });
     };
 
     const months = generateCalendarData();
@@ -171,23 +134,31 @@ function CalendarHeatmap({ onDayClick, refreshTrigger }) {
     return (
         <div className="calendar-heatmap">
             <div className="heatmap-header">
-                <h2>📊 Activity Calendar</h2>
+                <h2>📊 Study Activity</h2>
                 <div className="legend">
                     <span className="legend-item">
                         <span className="legend-box empty"></span>
                         No data
                     </span>
                     <span className="legend-item">
-                        <span className="legend-box early"></span>
-                        Before 5 AM
+                        <span className="legend-box study-none"></span>
+                        0h
                     </span>
                     <span className="legend-item">
-                        <span className="legend-box good"></span>
-                        5-7 AM
+                        <span className="legend-box study-low"></span>
+                        &lt;1h
                     </span>
                     <span className="legend-item">
-                        <span className="legend-box late"></span>
-                        After 7 AM
+                        <span className="legend-box study-medium"></span>
+                        1-2h
+                    </span>
+                    <span className="legend-item">
+                        <span className="legend-box study-good"></span>
+                        2-4h
+                    </span>
+                    <span className="legend-item">
+                        <span className="legend-box study-high"></span>
+                        4h+
                     </span>
                 </div>
             </div>
@@ -215,51 +186,8 @@ function CalendarHeatmap({ onDayClick, refreshTrigger }) {
                                                 key={dayIndex}
                                                 className={`day-cell ${day ? getColorClass(day.activity) : 'placeholder'}`}
                                                 onClick={() => day && onDayClick(day.date, day.activity)}
-                                                onMouseEnter={() => handleMouseEnter(day)}
-                                                onMouseLeave={handleMouseLeave}
-                                            >
-                                                {/* Compare by date string, not object reference */}
-                                                {hoveredDate === day?.date && day && (
-                                                    <div className="tooltip-rich">
-                                                        <div className="tooltip-header">
-                                                            <span className="tooltip-date">{formatDate(day.date)}</span>
-                                                        </div>
-
-                                                        {!day.activity ? (
-                                                            <div className="tooltip-empty">No activity logged</div>
-                                                        ) : (
-                                                            <>
-                                                                <div className="tooltip-wake">
-                                                                    <span className="tooltip-icon">⏰</span>
-                                                                    <span>Woke at <strong>{day.activity.wakeTime}</strong></span>
-                                                                </div>
-
-                                                                {detailsLoading ? (
-                                                                    <div className="tooltip-loading">Loading sessions...</div>
-                                                                ) : hoveredDetails && hoveredDetails.studySessions?.length > 0 ? (
-                                                                    <div className="tooltip-sessions">
-                                                                        <div className="tooltip-sessions-header">
-                                                                            📚 Study Sessions ({formatDuration(hoveredDetails.totalStudyMinutes)})
-                                                                        </div>
-                                                                        {hoveredDetails.studySessions.map((session, idx) => (
-                                                                            <div key={idx} className="tooltip-session">
-                                                                                <span className="session-bullet">•</span>
-                                                                                <span className="session-topic">{session.topic}</span>
-                                                                                <span className="session-time">{formatDuration(session.duration)}</span>
-                                                                                {session.notes && (
-                                                                                    <div className="session-notes">"{session.notes}"</div>
-                                                                                )}
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="tooltip-no-study">No study sessions</div>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
+                                                title={day ? `${day.date}${day.activity ? ` - ${formatStudyHours(day.activity.studyMinutes)}` : ''}` : ''}
+                                            />
                                         ))}
                                     </div>
                                 ))}

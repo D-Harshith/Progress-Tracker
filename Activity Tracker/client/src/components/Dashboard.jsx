@@ -32,15 +32,15 @@ function Dashboard() {
 
             <div className="main-content">
                 <div className="content-grid">
-                    <div className="form-section">
-                        <ActivityForm onActivitySaved={handleActivitySaved} />
-                    </div>
-
                     <div className="calendar-section">
                         <CalendarHeatmap
                             onDayClick={handleDayClick}
                             refreshTrigger={refreshTrigger}
                         />
+                    </div>
+
+                    <div className="form-section">
+                        <ActivityForm onActivitySaved={handleActivitySaved} />
                     </div>
                 </div>
             </div>

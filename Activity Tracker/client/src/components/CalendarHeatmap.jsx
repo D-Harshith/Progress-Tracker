@@ -1,13 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { analyticsApi } from '../services/api';
 
 function CalendarHeatmap({ onDayClick, refreshTrigger }) {
     const [heatmapData, setHeatmapData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const heatmapRef = useRef(null);
 
     useEffect(() => {
         fetchHeatmapData();
     }, [refreshTrigger]);
+
+    // Auto-scroll to show current month (rightmost) when loaded
+    useEffect(() => {
+        if (!loading && heatmapRef.current) {
+            heatmapRef.current.scrollLeft = heatmapRef.current.scrollWidth;
+        }
+    }, [loading]);
 
     const fetchHeatmapData = async () => {
         try {
@@ -163,7 +171,7 @@ function CalendarHeatmap({ onDayClick, refreshTrigger }) {
                 </div>
             </div>
 
-            <div className="heatmap-container">
+            <div className="heatmap-container" ref={heatmapRef}>
                 <div className="day-labels">
                     <span></span>
                     <span>Mon</span>

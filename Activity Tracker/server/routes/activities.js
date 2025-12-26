@@ -32,8 +32,15 @@ router.get('/', async (req, res) => {
 // GET single activity by date
 router.get('/:date', async (req, res) => {
     try {
-        const date = normalizeDate(req.params.date);
-        const activity = await Activity.findOne({ date });
+        // Parse the date string and create a range for that day (handles timezone issues)
+        const dateStr = req.params.date; // Expected format: YYYY-MM-DD
+        const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+        const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
+
+        // Query for activities where date falls within the day range
+        const activity = await Activity.findOne({
+            date: { $gte: startOfDay, $lte: endOfDay }
+        });
 
         if (!activity) {
             return res.status(404).json({ message: 'Activity not found for this date' });
@@ -49,10 +56,16 @@ router.get('/:date', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const { date, wakeTime, studySessions } = req.body;
-        const normalizedDate = normalizeDate(date);
+        // Use UTC date to avoid timezone offset issues
+        const dateStr = date; // Expected format: YYYY-MM-DD
+        const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+        const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
+        const normalizedDate = new Date(dateStr + 'T12:00:00.000Z'); // Use noon UTC for storage
 
-        // Check if activity exists for this date
-        let activity = await Activity.findOne({ date: normalizedDate });
+        // Check if activity exists for this date (using range query for timezone safety)
+        let activity = await Activity.findOne({
+            date: { $gte: startOfDay, $lte: endOfDay }
+        });
 
         if (activity) {
             // Update existing activity
@@ -77,10 +90,14 @@ router.post('/', async (req, res) => {
 // PUT add study session to existing activity
 router.put('/:date/session', async (req, res) => {
     try {
-        const date = normalizeDate(req.params.date);
+        const dateStr = req.params.date;
+        const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+        const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
         const { topic, duration, notes } = req.body;
 
-        let activity = await Activity.findOne({ date });
+        let activity = await Activity.findOne({
+            date: { $gte: startOfDay, $lte: endOfDay }
+        });
 
         if (!activity) {
             return res.status(404).json({ message: 'Activity not found for this date' });
@@ -97,8 +114,13 @@ router.put('/:date/session', async (req, res) => {
 // DELETE activity by date
 router.delete('/:date', async (req, res) => {
     try {
-        const date = normalizeDate(req.params.date);
-        const result = await Activity.findOneAndDelete({ date });
+        const dateStr = req.params.date;
+        const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+        const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
+
+        const result = await Activity.findOneAndDelete({
+            date: { $gte: startOfDay, $lte: endOfDay }
+        });
 
         if (!result) {
             return res.status(404).json({ message: 'Activity not found for this date' });

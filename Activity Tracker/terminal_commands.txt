@@ -1,0 +1,4 @@
+to kill a process: 
+step1: netstat -ano | findstr :5000
+step2: This will show something like TCP ... LISTENING 12345 - the last number is the Process ID (PID).
+        Then kill it:taskkill /F /PID 12345

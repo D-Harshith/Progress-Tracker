@@ -173,12 +173,14 @@ router.get('/monthly', async (req, res) => {
 // GET heatmap data (last 365 days)
 router.get('/heatmap', async (req, res) => {
     try {
+        // Use end of tomorrow UTC to ensure we catch all of today's entries regardless of timezone
         const endDate = new Date();
-        endDate.setHours(23, 59, 59, 999);
+        endDate.setUTCDate(endDate.getUTCDate() + 1);
+        endDate.setUTCHours(23, 59, 59, 999);
 
         const startDate = new Date();
         startDate.setFullYear(startDate.getFullYear() - 1);
-        startDate.setHours(0, 0, 0, 0);
+        startDate.setUTCHours(0, 0, 0, 0);
 
         const activities = await Activity.find({
             date: { $gte: startDate, $lte: endDate }

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { activitiesApi } from '../services/api';
 
 function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) {
-    const [activity, setActivity] = useState(initialActivity);
-    const [loading, setLoading] = useState(!initialActivity);
+    const [activity, setActivity] = useState(null);
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -13,13 +13,12 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
     const [studySessions, setStudySessions] = useState([]);
     const [newSession, setNewSession] = useState({ topic: '', hours: 0, minutes: 30, notes: '' });
 
+    // Always fetch fresh data from API when modal opens
     useEffect(() => {
-        if (!initialActivity && date) {
+        if (date) {
             fetchActivity();
-        } else if (initialActivity) {
-            populateForm(initialActivity);
         }
-    }, [date, initialActivity]);
+    }, [date]);
 
     const populateForm = (act) => {
         if (act) {

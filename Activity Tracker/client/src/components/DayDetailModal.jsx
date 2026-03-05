@@ -20,6 +20,15 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
         }
     }, [date]);
 
+    // Close on Escape key
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [onClose]);
+
     const populateForm = (act) => {
         if (act) {
             setWakeTime(act.wakeTime || '06:00');
@@ -58,8 +67,19 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
             setSaving(true);
             setError(null);
 
+            // Auto-add pending session if topic is filled
+            let sessionsToSave = [...studySessions];
+            const pendingDuration = (newSession.hours * 60) + newSession.minutes;
+            if (newSession.topic.trim() && pendingDuration >= 1) {
+                sessionsToSave.push({
+                    ...newSession,
+                    topic: newSession.topic.trim(),
+                    notes: newSession.notes.trim()
+                });
+            }
+
             // Convert sessions to API format
-            const sessionsData = studySessions.map(s => ({
+            const sessionsData = sessionsToSave.map(s => ({
                 topic: s.topic,
                 duration: (s.hours * 60) + s.minutes,
                 notes: s.notes || ''
@@ -72,6 +92,7 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
             });
 
             setIsEditing(false);
+            setNewSession({ topic: '', hours: 0, minutes: 30, notes: '' });
             onUpdate();
 
             // Refresh the activity display
@@ -97,11 +118,13 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
 
     const addSession = () => {
         if (!newSession.topic.trim()) return;
+        const totalMin = (newSession.hours * 60) + newSession.minutes;
+        if (totalMin < 1) return;
         setStudySessions([...studySessions, {
-            topic: newSession.topic,
+            topic: newSession.topic.trim(),
             hours: newSession.hours,
             minutes: newSession.minutes,
-            notes: newSession.notes
+            notes: newSession.notes.trim()
         }]);
         setNewSession({ topic: '', hours: 0, minutes: 30, notes: '' });
     };
@@ -113,9 +136,8 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
     const formatDuration = (minutes) => {
         const hours = Math.floor(minutes / 60);
         const mins = minutes % 60;
-        if (hours > 0) {
-            return `${hours}h ${mins}m`;
-        }
+        if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+        if (hours > 0) return `${hours}h`;
         return `${mins}m`;
     };
 
@@ -132,11 +154,19 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
         return studySessions.reduce((sum, s) => sum + (s.hours * 60) + s.minutes, 0);
     };
 
+    const getWakeCategory = (timeStr) => {
+        if (!timeStr) return '';
+        const [hours] = timeStr.split(':').map(Number);
+        if (hours < 5) return 'early';
+        if (hours < 7) return 'good';
+        return 'late';
+    };
+
     // Render view mode
     const renderViewMode = () => (
         <div className="modal-body">
             <div className="wake-section">
-                <div className="wake-badge">
+                <div className={`wake-badge ${getWakeCategory(activity.wakeTime)}`}>
                     <span className="wake-icon">⏰</span>
                     <div>
                         <span className="wake-time">{activity.wakeTime}</span>
@@ -146,7 +176,7 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
             </div>
 
             <div className="study-section">
-                <h3>📚 Study Sessions</h3>
+                <h3>Study Sessions</h3>
 
                 {(!activity.studySessions || activity.studySessions.length === 0) ? (
                     <p className="no-sessions">No study sessions logged</p>
@@ -155,12 +185,12 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
                         <div className="sessions-list">
                             {activity.studySessions.map((session, index) => (
                                 <div key={index} className="session-item">
-                                    <div className="session-topic">{session.topic}</div>
-                                    <div className="session-duration">
+                                    <div className="session-topic-text">{session.topic}</div>
+                                    <div className="session-duration-badge">
                                         {formatDuration(session.duration)}
                                     </div>
                                     {session.notes && (
-                                        <div className="session-notes">{session.notes}</div>
+                                        <div className="session-notes-text">{session.notes}</div>
                                     )}
                                 </div>
                             ))}
@@ -176,20 +206,24 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
 
             <div className="modal-actions">
                 <button className="btn-primary" onClick={() => { setIsEditing(true); populateForm(activity); }}>
-                    ✏️ Edit
+                    Edit
                 </button>
                 <button className="btn-delete" onClick={handleDelete}>
-                    🗑️ Delete
+                    Delete
                 </button>
             </div>
         </div>
     );
 
-    // Render edit mode
-    const renderEditMode = () => (
+    // Render edit/create mode
+    const renderEditMode = (isCreate = false) => (
         <div className="modal-body edit-mode">
+            {isCreate && (
+                <p className="create-hint">No activity logged for this day. Create one!</p>
+            )}
+
             <div className="form-group">
-                <label>⏰ Wake Time</label>
+                <label>Wake Time</label>
                 <input
                     type="time"
                     value={wakeTime}
@@ -198,13 +232,16 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
             </div>
 
             <div className="form-group">
-                <label>📚 Study Sessions</label>
+                <label>Study Sessions {!isCreate ? '' : '(optional)'}</label>
 
                 {studySessions.length > 0 && (
                     <div className="edit-sessions-list">
                         {studySessions.map((session, index) => (
                             <div key={index} className="edit-session-item">
-                                <span className="session-topic">{session.topic}</span>
+                                <div className="edit-session-info">
+                                    <span className="session-topic">{session.topic}</span>
+                                    {session.notes && <span className="edit-session-notes">{session.notes}</span>}
+                                </div>
                                 <span className="session-duration">{session.hours}h {session.minutes}m</span>
                                 <button
                                     className="btn-remove-session"
@@ -216,7 +253,7 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
                     </div>
                 )}
 
-                <div className="add-session-form">
+                <div className="add-session-form modal-add-session">
                     <input
                         type="text"
                         placeholder="Topic (e.g., Math, Physics)"
@@ -236,7 +273,7 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
                             value={newSession.minutes}
                             onChange={(e) => setNewSession({ ...newSession, minutes: parseInt(e.target.value) })}
                         >
-                            {[0, 15, 30, 45].map(m => (
+                            {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
                                 <option key={m} value={m}>{m}m</option>
                             ))}
                         </select>
@@ -251,11 +288,17 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
                         type="button"
                         className="btn-add-session"
                         onClick={addSession}
-                        disabled={!newSession.topic.trim()}
+                        disabled={!newSession.topic.trim() || ((newSession.hours * 60) + newSession.minutes < 1)}
                     >
                         + Add
                     </button>
                 </div>
+
+                {newSession.topic.trim() && (
+                    <div className="pending-session-hint">
+                        "{newSession.topic}" ({formatDuration((newSession.hours * 60) + newSession.minutes)}) will be auto-saved
+                    </div>
+                )}
 
                 {studySessions.length > 0 && (
                     <div className="study-total">
@@ -266,97 +309,11 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
             </div>
 
             <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setIsEditing(false)} disabled={saving}>
+                <button className="btn-secondary" onClick={isCreate ? onClose : () => setIsEditing(false)} disabled={saving}>
                     Cancel
                 </button>
                 <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                    {saving ? 'Saving...' : '💾 Save'}
-                </button>
-            </div>
-        </div>
-    );
-
-    // Render create new mode (no existing activity)
-    const renderCreateMode = () => (
-        <div className="modal-body edit-mode">
-            <p className="create-hint">No activity logged for this day. Create one!</p>
-
-            <div className="form-group">
-                <label>⏰ Wake Time</label>
-                <input
-                    type="time"
-                    value={wakeTime}
-                    onChange={(e) => setWakeTime(e.target.value)}
-                />
-            </div>
-
-            <div className="form-group">
-                <label>📚 Study Sessions (optional)</label>
-
-                {studySessions.length > 0 && (
-                    <div className="edit-sessions-list">
-                        {studySessions.map((session, index) => (
-                            <div key={index} className="edit-session-item">
-                                <span className="session-topic">{session.topic}</span>
-                                <span className="session-duration">{session.hours}h {session.minutes}m</span>
-                                <button
-                                    className="btn-remove-session"
-                                    onClick={() => removeSession(index)}
-                                    type="button"
-                                >×</button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <div className="add-session-form">
-                    <input
-                        type="text"
-                        placeholder="Topic (e.g., Math, Physics)"
-                        value={newSession.topic}
-                        onChange={(e) => setNewSession({ ...newSession, topic: e.target.value })}
-                    />
-                    <div className="duration-inputs">
-                        <select
-                            value={newSession.hours}
-                            onChange={(e) => setNewSession({ ...newSession, hours: parseInt(e.target.value) })}
-                        >
-                            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(h => (
-                                <option key={h} value={h}>{h}h</option>
-                            ))}
-                        </select>
-                        <select
-                            value={newSession.minutes}
-                            onChange={(e) => setNewSession({ ...newSession, minutes: parseInt(e.target.value) })}
-                        >
-                            {[0, 15, 30, 45].map(m => (
-                                <option key={m} value={m}>{m}m</option>
-                            ))}
-                        </select>
-                    </div>
-                    <input
-                        type="text"
-                        placeholder="Notes (optional)"
-                        value={newSession.notes}
-                        onChange={(e) => setNewSession({ ...newSession, notes: e.target.value })}
-                    />
-                    <button
-                        type="button"
-                        className="btn-add-session"
-                        onClick={addSession}
-                        disabled={!newSession.topic.trim()}
-                    >
-                        + Add
-                    </button>
-                </div>
-            </div>
-
-            <div className="modal-actions">
-                <button className="btn-secondary" onClick={onClose} disabled={saving}>
-                    Cancel
-                </button>
-                <button className="btn-primary" onClick={handleSave} disabled={saving}>
-                    {saving ? 'Saving...' : '💾 Create Activity'}
+                    {saving ? 'Saving...' : isCreate ? 'Create Activity' : 'Save Changes'}
                 </button>
             </div>
         </div>
@@ -367,7 +324,7 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
             <div className="modal-content" onClick={e => e.stopPropagation()}>
                 <button className="modal-close" onClick={onClose}>×</button>
 
-                <h2>📅 {formatDate(date)}</h2>
+                <h2>{formatDate(date)}</h2>
 
                 {loading && (
                     <div className="modal-loading">
@@ -383,11 +340,11 @@ function DayDetailModal({ date, activity: initialActivity, onClose, onUpdate }) 
                     </div>
                 )}
 
-                {!loading && !error && !activity && renderCreateMode()}
+                {!loading && !error && !activity && renderEditMode(true)}
 
                 {!loading && !error && activity && !isEditing && renderViewMode()}
 
-                {!loading && !error && activity && isEditing && renderEditMode()}
+                {!loading && !error && activity && isEditing && renderEditMode(false)}
             </div>
         </div>
     );

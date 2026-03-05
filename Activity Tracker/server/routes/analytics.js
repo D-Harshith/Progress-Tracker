@@ -210,4 +210,72 @@ router.get('/heatmap', async (req, res) => {
     }
 });
 
+// GET streak data
+router.get('/streak', async (req, res) => {
+    try {
+        // Get all activities sorted by date descending
+        const activities = await Activity.find({})
+            .sort({ date: -1 })
+            .select('date totalStudyMinutes');
+
+        if (activities.length === 0) {
+            return res.json({ currentStreak: 0, longestStreak: 0 });
+        }
+
+        // Normalize dates to YYYY-MM-DD strings
+        const loggedDates = new Set(
+            activities.map(a => a.date.toISOString().split('T')[0])
+        );
+
+        // Calculate current streak (LeetCode-style)
+        // Streak is alive if today OR yesterday is logged.
+        // Start counting back from the most recent logged day.
+        let currentStreak = 0;
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+        // Only count a streak if today or yesterday has an entry
+        if (loggedDates.has(todayStr) || loggedDates.has(yesterdayStr)) {
+            // Start from today if logged, otherwise from yesterday
+            const checkDate = loggedDates.has(todayStr) ? new Date(today) : new Date(yesterday);
+
+            while (true) {
+                const dateStr = checkDate.toISOString().split('T')[0];
+                if (loggedDates.has(dateStr)) {
+                    currentStreak++;
+                    checkDate.setDate(checkDate.getDate() - 1);
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // Calculate longest streak
+        const sortedDates = [...loggedDates].sort();
+        let longestStreak = 0;
+        let streak = 1;
+
+        for (let i = 1; i < sortedDates.length; i++) {
+            const prev = new Date(sortedDates[i - 1] + 'T12:00:00Z');
+            const curr = new Date(sortedDates[i] + 'T12:00:00Z');
+            const diffDays = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 1) {
+                streak++;
+            } else {
+                longestStreak = Math.max(longestStreak, streak);
+                streak = 1;
+            }
+        }
+        longestStreak = Math.max(longestStreak, streak);
+
+        res.json({ currentStreak, longestStreak, totalDays: loggedDates.size });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 module.exports = router;

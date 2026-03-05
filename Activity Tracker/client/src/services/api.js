@@ -75,5 +75,11 @@ export const analyticsApi = {
     getHeatmap: async () => {
         const response = await fetch(`${API_BASE}/analytics/heatmap`);
         return handleResponse(response);
+    },
+
+    // Get streak data
+    getStreak: async () => {
+        const response = await fetch(`${API_BASE}/analytics/streak`);
+        return handleResponse(response);
     }
 };
